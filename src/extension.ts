@@ -82,7 +82,7 @@ async function scanProjectForComments(): Promise<
   const filePattern = `**/*.{${config.fileTypes.join(",")}}`;
   const files = await vscode.workspace.findFiles(
     filePattern,
-    "**/node_modules/**"
+    "**/{node_modules,.git,dist,build,out,coverage,logs,vendor}/**"
   );
 
   if (files.length === 0) {
@@ -95,11 +95,11 @@ async function scanProjectForComments(): Promise<
   const commentPattern = config.commentTypes.join("|");
   const regex = new RegExp(`(\\/\\/\\s*(${commentPattern})\\b:?.*)`, "gi");
 
-  for (const file of files) {
+  const fileScanPromises = files.map(async (file) => {
     const document = await vscode.workspace.openTextDocument(file);
     const text = document.getText();
     let match;
-
+  
     while ((match = regex.exec(text)) !== null) {
       const line = document.positionAt(match.index).line + 1;
       results.push({
@@ -109,7 +109,10 @@ async function scanProjectForComments(): Promise<
         text: match[1],
       });
     }
-  }
+  });
+  
+  await Promise.all(fileScanPromises);
+  
   return results;
 }
 
@@ -194,7 +197,7 @@ class TodoTreeViewProvider
 
   getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
     if (this.loading) {
-      return [new vscode.TreeItem("🔄 Scanning...")];
+      return [new vscode.TreeItem("🔍 Scanning...")];
     }
 
     if (!element) {
@@ -262,9 +265,6 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(openFileCommand, refreshCommand);
-  const outputChannel = vscode.window.createOutputChannel("Todo Track");
-  outputChannel.appendLine("🚀 Todo Track activated successfully!");
-  outputChannel.show();
 }
 
 export function deactivate() {}
